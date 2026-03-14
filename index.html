@@ -1,0 +1,982 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Horizontify — Turn tall photos into wide ones.</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@700;800&family=DM+Sans:wght@400;500&display=swap');
+
+  :root {
+    --bg:           #0f0f11;
+    --surface:      #1a1a1f;
+    --surface-2:    #25252d;
+    --border:       #2e2e38;
+    --text:         #e8e8f0;
+    --text-muted:   #7a7a8c;
+    --accent:       #6c63ff;
+    --accent-dim:   rgba(108,99,255,0.12);
+    --success:      #3ecf8e;
+    --warn:         #f6ad55;
+    --danger:       #fc5c7d;
+    --radius:       12px;
+    --radius-sm:    6px;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 16px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100dvh;
+    padding: 0 16px;
+  }
+
+  /* ── Header ─────────────────────────────────── */
+  header {
+    width: 100%;
+    max-width: 720px;
+    padding: 48px 0 32px;
+    text-align: center;
+  }
+
+  .logo-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: center;
+    gap: 10px;
+    margin-bottom: 6px;
+  }
+
+  h1 {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: clamp(2.2rem, 6vw, 3.4rem);
+    letter-spacing: -0.03em;
+    color: var(--text);
+    line-height: 1;
+  }
+
+  .logo-badge {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.65rem;
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--accent);
+    background: var(--accent-dim);
+    border: 1px solid rgba(108,99,255,0.3);
+    border-radius: 4px;
+    padding: 3px 7px;
+    position: relative;
+    top: -4px;
+  }
+
+  .tagline {
+    font-size: 0.95rem;
+    color: var(--text-muted);
+    letter-spacing: 0.01em;
+  }
+
+  /* ── Main ────────────────────────────────────── */
+  main {
+    flex: 1;
+    width: 100%;
+    max-width: 720px;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 20px;
+  }
+
+  /* ── Upload Zone ─────────────────────────────── */
+  #upload-zone {
+    border: 2px dashed var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+    padding: 72px 40px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.18s, background 0.18s, transform 0.12s;
+    user-select: none;
+    position: relative;
+    overflow: hidden;
+  }
+
+  #upload-zone::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse at 50% 0%, rgba(108,99,255,0.06) 0%, transparent 70%);
+    opacity: 0;
+    transition: opacity 0.2s;
+    pointer-events: none;
+  }
+
+  #upload-zone:hover,
+  #upload-zone.drag-over {
+    border-color: var(--accent);
+    background: var(--surface-2);
+    transform: translateY(-1px);
+  }
+
+  #upload-zone:hover::before,
+  #upload-zone.drag-over::before {
+    opacity: 1;
+  }
+
+  #upload-zone.drag-over {
+    background: var(--accent-dim);
+  }
+
+  .drop-icon {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 20px;
+    color: var(--text-muted);
+    transition: color 0.18s, transform 0.18s;
+  }
+
+  #upload-zone:hover .drop-icon,
+  #upload-zone.drag-over .drop-icon {
+    color: var(--accent);
+    transform: translateY(-3px);
+  }
+
+  .drop-primary {
+    font-size: 1.05rem;
+    font-weight: 500;
+    color: var(--text);
+    margin-bottom: 6px;
+  }
+
+  .drop-secondary {
+    font-size: 0.9rem;
+    color: var(--text-muted);
+  }
+
+  .browse-link {
+    color: var(--accent);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    cursor: pointer;
+  }
+
+  /* ── Error banner ────────────────────────────── */
+  #error-banner {
+    display: none;
+    background: rgba(252,92,125,0.12);
+    border: 1px solid rgba(252,92,125,0.35);
+    border-radius: var(--radius-sm);
+    padding: 12px 16px;
+    font-size: 0.9rem;
+    color: var(--danger);
+  }
+
+  #error-banner.visible { display: block; }
+
+  /* ── Result Zone ─────────────────────────────── */
+  #result-zone {
+    display: none;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  #result-zone.visible { display: flex; }
+
+  .canvas-wrapper {
+    border-radius: var(--radius);
+    overflow: hidden;
+    box-shadow: 0 12px 48px rgba(0,0,0,0.7);
+    background: #000;
+    line-height: 0;
+  }
+
+  #output-canvas {
+    display: block;
+    max-width: 100%;
+    height: auto;
+  }
+
+  /* ── Crop Badge (landscape notice only) ─────── */
+  #crop-badge {
+    display: none;
+    border-radius: var(--radius-sm);
+    border-left: 4px solid var(--text-muted);
+    background: var(--surface);
+    padding: 14px 18px;
+    font-size: 0.9rem;
+    color: var(--text);
+    line-height: 1.5;
+  }
+
+  #crop-badge.visible { display: block; }
+
+  #crop-badge .badge-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.7rem;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+    opacity: 0.7;
+  }
+
+  /* ── Crop Alternatives ───────────────────────── */
+  #crop-alternatives {
+    display: none;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  #crop-alternatives.visible { display: flex; }
+
+  .crop-section-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.7rem;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+
+  .crop-section-hint {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    margin-top: -4px;
+  }
+
+  .crop-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    overflow-x: auto;
+  }
+
+  .crop-option {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+    transition: border-color 0.15s;
+    min-width: 0;
+  }
+
+  .crop-option:hover {
+    border-color: var(--accent);
+  }
+
+  .crop-option--smart {
+    border-color: rgba(108,99,255,0.45);
+    background: rgba(108,99,255,0.05);
+  }
+
+  .crop-option--smart:hover {
+    border-color: var(--accent);
+  }
+
+  .smart-method {
+    font-size: 0.65rem;
+    color: var(--text-muted);
+    opacity: 0.7;
+    font-family: 'DM Mono', monospace;
+    flex: 1;
+    text-align: center;
+  }
+
+  @media (max-width: 520px) {
+    .crop-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+
+  .thumb-canvas {
+    display: block;
+    width: 100%;
+    height: auto;
+    background: #000;
+  }
+
+  .crop-option-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    gap: 8px;
+  }
+
+  .crop-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.72rem;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+
+  .btn-crop-dl {
+    padding: 5px 12px;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--accent);
+    border: 1px solid rgba(108,99,255,0.4);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.8rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+    white-space: nowrap;
+  }
+
+  .btn-crop-dl:hover {
+    background: var(--accent-dim);
+    border-color: var(--accent);
+  }
+
+  /* ── Ratio Toggle ────────────────────────────── */
+  .ratio-toggle {
+    display: flex;
+    align-self: flex-start;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+  }
+
+  .btn-ratio {
+    padding: 6px 20px;
+    background: transparent;
+    color: var(--text-muted);
+    border: none;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.78rem;
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+  }
+
+  .btn-ratio + .btn-ratio { border-left: 1px solid var(--border); }
+
+  .btn-ratio.active {
+    background: var(--surface-2);
+    color: var(--text);
+  }
+
+  .btn-ratio:not(.active):hover {
+    background: var(--surface);
+    color: var(--text);
+  }
+
+  /* ── Action Row ──────────────────────────────── */
+  .action-row {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .btn-primary, .btn-secondary {
+    padding: 12px 28px;
+    border-radius: var(--radius-sm);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.95rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: opacity 0.15s, transform 0.1s, box-shadow 0.15s;
+    border: none;
+    white-space: nowrap;
+  }
+
+  .btn-primary {
+    background: var(--accent);
+    color: #fff;
+    box-shadow: 0 2px 16px rgba(108,99,255,0.35);
+  }
+
+  .btn-primary:hover {
+    opacity: 0.88;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 24px rgba(108,99,255,0.45);
+  }
+
+  .btn-primary:active { transform: translateY(0); }
+
+  .btn-secondary {
+    background: transparent;
+    color: var(--text-muted);
+    border: 1px solid var(--border);
+  }
+
+  .btn-secondary:hover {
+    color: var(--text);
+    border-color: var(--text-muted);
+  }
+
+  /* ── Processing overlay ──────────────────────── */
+  #processing {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 40px;
+    font-size: 0.9rem;
+    color: var(--text-muted);
+  }
+
+  #processing.visible { display: flex; }
+
+  .spinner {
+    width: 18px;
+    height: 18px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    flex-shrink: 0;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Footer ──────────────────────────────────── */
+  footer {
+    width: 100%;
+    max-width: 720px;
+    padding: 28px 0 36px;
+    text-align: center;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    font-family: 'DM Mono', monospace;
+    letter-spacing: 0.02em;
+  }
+
+  /* ── Responsive ──────────────────────────────── */
+  @media (max-width: 600px) {
+    header { padding: 32px 0 24px; }
+    #upload-zone { padding: 48px 24px; }
+    .action-row { flex-direction: column; }
+    .btn-primary, .btn-secondary { text-align: center; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo-row">
+    <h1>Horizontify</h1>
+    <span class="logo-badge">4:3</span>
+  </div>
+  <p class="tagline">Turn tall photos into wide ones.</p>
+</header>
+
+<main>
+
+  <!-- Upload state -->
+  <div id="upload-zone" role="button" tabindex="0" aria-label="Upload photo">
+    <div class="drop-icon">
+      <svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <rect x="6" y="34" width="36" height="8" rx="3" fill="currentColor" opacity="0.18"/>
+        <path d="M24 6v24M24 30l-8-8M24 30l8-8" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M10 36h28" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+      </svg>
+    </div>
+    <p class="drop-primary">Drop a photo here</p>
+    <p class="drop-secondary">or <span class="browse-link">browse to upload</span></p>
+    <input type="file" id="file-input" accept="image/*" hidden>
+  </div>
+
+  <!-- Error banner -->
+  <div id="error-banner" role="alert"></div>
+
+  <!-- Processing indicator -->
+  <div id="processing">
+    <div class="spinner"></div>
+    <span>Processing image…</span>
+  </div>
+
+  <!-- Result state -->
+  <div id="result-zone">
+    <div class="canvas-wrapper">
+      <canvas id="output-canvas"></canvas>
+    </div>
+    <div id="ratio-toggle" class="ratio-toggle" style="display:none">
+      <button class="btn-ratio active" data-ratio="0.75"   data-label="43" >4:3</button>
+      <button class="btn-ratio"        data-ratio="0.5625" data-label="169">16:9</button>
+    </div>
+    <div id="crop-badge">
+      <div class="badge-label">Notice</div>
+      <div id="crop-message"></div>
+    </div>
+    <div class="action-row">
+      <button class="btn-primary" id="download-btn">Download JPEG</button>
+      <button class="btn-secondary" id="reset-btn">Start over</button>
+    </div>
+    <div id="crop-alternatives">
+      <p class="crop-section-label">Or try a straight crop</p>
+      <p class="crop-section-hint" id="crop-hint">These keep the full width and trim top/bottom to 4:3.</p>
+      <div class="crop-grid">
+        <div class="crop-option crop-option--smart">
+          <canvas id="thumb-smart" class="thumb-canvas"></canvas>
+          <div class="crop-option-footer">
+            <span class="crop-label">✦ Smart</span>
+            <span class="smart-method" id="smart-method">golden ratio</span>
+            <button class="btn-crop-dl" id="dl-smart">Download</button>
+          </div>
+        </div>
+        <div class="crop-option">
+          <canvas id="thumb-top" class="thumb-canvas"></canvas>
+          <div class="crop-option-footer">
+            <span class="crop-label">Top</span>
+            <button class="btn-crop-dl" id="dl-top">Download</button>
+          </div>
+        </div>
+        <div class="crop-option">
+          <canvas id="thumb-center" class="thumb-canvas"></canvas>
+          <div class="crop-option-footer">
+            <span class="crop-label">Center</span>
+            <button class="btn-crop-dl" id="dl-center">Download</button>
+          </div>
+        </div>
+        <div class="crop-option">
+          <canvas id="thumb-bottom" class="thumb-canvas"></canvas>
+          <div class="crop-option-footer">
+            <span class="crop-label">Bottom</span>
+            <button class="btn-crop-dl" id="dl-bottom">Download</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<footer>Processed entirely in your browser. Nothing is uploaded.</footer>
+
+<script>
+'use strict';
+
+// ── Constants ──────────────────────────────────────────────────────────────
+const BLUR_RADIUS_BASE   = 24;
+const BLUR_OVERSIZE_MULT = 2.5;
+const DARKEN_ALPHA       = 0.25;
+const SEPARATOR_ALPHA    = 0.15;
+const JPEG_QUALITY       = 0.92;
+const MAX_CANVAS_WIDTH   = 4096;
+const THUMB_W              = 240;
+const THUMB_H              = 180;
+const SMART_SUBJECT_FRAC   = 0.25;   // portrait photos: subject eyes ~25% from top of frame
+const SMART_CROP_EYE_FRAC  = 0.30;   // place eyes at 30% from top of crop, leaving headroom
+
+// ── State ──────────────────────────────────────────────────────────────────
+const state = {
+  originalFile:  null,
+  originalImage: null,
+  landscapeURL:  null,   // object URL for already-landscape downloads
+  ratio:         3/4,    // height/width multiplier for target aspect ratio
+  ratioLabel:    '43',   // used in filenames ('43' or '169')
+};
+
+// ── DOM refs ───────────────────────────────────────────────────────────────
+const uploadZone       = document.getElementById('upload-zone');
+const fileInput        = document.getElementById('file-input');
+const errorBanner      = document.getElementById('error-banner');
+const processing       = document.getElementById('processing');
+const resultZone       = document.getElementById('result-zone');
+const canvas           = document.getElementById('output-canvas');
+const cropBadge        = document.getElementById('crop-badge');
+const cropMessage      = document.getElementById('crop-message');
+const downloadBtn      = document.getElementById('download-btn');
+const resetBtn         = document.getElementById('reset-btn');
+const ratioToggle      = document.getElementById('ratio-toggle');
+const cropAlternatives = document.getElementById('crop-alternatives');
+const thumbSmart       = document.getElementById('thumb-smart');
+const thumbTop         = document.getElementById('thumb-top');
+const thumbCenter      = document.getElementById('thumb-center');
+const thumbBottom      = document.getElementById('thumb-bottom');
+
+// ── Init ───────────────────────────────────────────────────────────────────
+function initApp() {
+  // Drag & drop on upload zone
+  uploadZone.addEventListener('dragover',  onDragOver);
+  uploadZone.addEventListener('dragleave', onDragLeave);
+  uploadZone.addEventListener('drop',      onDrop);
+
+  // Click to open file picker
+  uploadZone.addEventListener('click', () => fileInput.click());
+  uploadZone.addEventListener('keydown', e => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInput.click(); }
+  });
+
+  // Prevent browse-link from double-triggering
+  document.querySelector('.browse-link').addEventListener('click', e => {
+    e.stopPropagation();
+    fileInput.click();
+  });
+
+  fileInput.addEventListener('change', e => {
+    if (e.target.files[0]) handleFile(e.target.files[0]);
+    fileInput.value = '';   // allow re-selecting same file
+  });
+
+  document.querySelectorAll('.btn-ratio').forEach(btn => {
+    btn.addEventListener('click', () =>
+      setRatio(parseFloat(btn.dataset.ratio), btn.dataset.label)
+    );
+  });
+
+  downloadBtn.addEventListener('click', onDownload);
+  resetBtn.addEventListener('click', resetToUpload);
+
+  // Global drag-over guard so browser doesn't navigate away on missed drops
+  document.addEventListener('dragover', e => e.preventDefault());
+  document.addEventListener('drop',     e => e.preventDefault());
+}
+
+// ── Drag & drop helpers ────────────────────────────────────────────────────
+function onDragOver(e) {
+  e.preventDefault();
+  e.stopPropagation();
+  uploadZone.classList.add('drag-over');
+}
+
+function onDragLeave(e) {
+  e.preventDefault();
+  e.stopPropagation();
+  uploadZone.classList.remove('drag-over');
+}
+
+function onDrop(e) {
+  e.preventDefault();
+  e.stopPropagation();
+  uploadZone.classList.remove('drag-over');
+  const file = e.dataTransfer.files[0];
+  if (file) handleFile(file);
+}
+
+// ── File handling ──────────────────────────────────────────────────────────
+function handleFile(file) {
+  hideError();
+  if (!file.type.startsWith('image/')) {
+    showError('Please upload an image file (JPEG, PNG, WebP, HEIC, etc.).');
+    return;
+  }
+  state.originalFile = file;
+  showProcessing();
+  loadImageFile(file)
+    .then(img => {
+      state.originalImage = img;
+      processImage(img);
+    })
+    .catch(() => {
+      hideProcessing();
+      showError('Could not read this image. The file may be corrupt or unsupported.');
+    });
+}
+
+function loadImageFile(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload  = () => { URL.revokeObjectURL(url); resolve(img); };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(); };
+    img.src = url;
+  });
+}
+
+// ── Image processing ───────────────────────────────────────────────────────
+function processImage(img) {
+  const W = img.naturalWidth;
+  const H = img.naturalHeight;
+
+  // Already landscape — show notice, offer original download
+  if (W >= H) {
+    hideProcessing();
+    canvas.style.display = 'none';
+    ratioToggle.style.display = 'none';
+    cropBadge.classList.add('visible');
+    cropBadge.querySelector('.badge-label').textContent = 'Notice';
+    cropMessage.textContent = 'This photo is already landscape — no conversion needed. Download the original below.';
+    cropAlternatives.classList.remove('visible');
+    if (state.landscapeURL) URL.revokeObjectURL(state.landscapeURL);
+    state.landscapeURL = URL.createObjectURL(state.originalFile);
+    downloadBtn.textContent = 'Download original';
+    showResultZone();
+    return;
+  }
+
+  // Portrait — process
+  canvas.style.display = 'block';
+  ratioToggle.style.display = '';
+  cropBadge.classList.remove('visible');
+  downloadBtn.textContent = `Download ${state.ratioLabel === '43' ? '4:3' : '16:9'} JPEG`;
+
+  const dims = computeCanvasDimensions(W, H);
+  canvas.width  = dims.canvasW;
+  canvas.height = dims.canvasH;
+
+  const ctx = canvas.getContext('2d');
+  renderPillarbox(ctx, img, dims);
+
+  renderCropAlternatives(img);
+
+  hideProcessing();
+  showResultZone();
+}
+
+function setRatio(ratio, label) {
+  state.ratio      = ratio;
+  state.ratioLabel = label;
+
+  // Update toggle button states
+  document.querySelectorAll('.btn-ratio').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.label === label);
+  });
+
+  // Re-render if a portrait image is currently loaded
+  const img = state.originalImage;
+  if (!img || img.naturalWidth >= img.naturalHeight) return;
+
+  const W   = img.naturalWidth;
+  const H   = img.naturalHeight;
+  const dims = computeCanvasDimensions(W, H);
+  canvas.width  = dims.canvasW;
+  canvas.height = dims.canvasH;
+  renderPillarbox(canvas.getContext('2d'), img, dims);
+  renderCropAlternatives(img);
+  downloadBtn.textContent = `Download ${label === '43' ? '4:3' : '16:9'} JPEG`;
+}
+
+function computeCanvasDimensions(imgW, imgH) {
+  const canvasW = Math.min(imgW, MAX_CANVAS_WIDTH);
+  const canvasH = Math.round(canvasW * state.ratio);
+  const scale   = Math.min(canvasW / imgW, canvasH / imgH);
+  const imgDrawW = Math.round(imgW * scale);
+  const imgDrawH = Math.round(imgH * scale);
+  const imgX     = Math.round((canvasW - imgDrawW) / 2);
+  const imgY     = Math.round((canvasH - imgDrawH) / 2);
+  return { canvasW, canvasH, imgDrawW, imgDrawH, imgX, imgY };
+}
+
+function renderPillarbox(ctx, img, dims) {
+  const { canvasW, canvasH, imgDrawW, imgDrawH, imgX, imgY } = dims;
+
+  // 1. Blurred background (draw oversized to absorb blur edge bleed)
+  const blurRadius = Math.max(BLUR_RADIUS_BASE, Math.round(canvasW * 0.025));
+  const oversize   = Math.round(blurRadius * BLUR_OVERSIZE_MULT);
+  ctx.save();
+  ctx.filter = `blur(${blurRadius}px)`;
+  ctx.drawImage(img, -oversize, -oversize, canvasW + oversize * 2, canvasH + oversize * 2);
+  ctx.filter = 'none';
+  ctx.restore();
+
+  // 2. Dark overlay to separate blurred bars from foreground
+  ctx.save();
+  ctx.fillStyle = `rgba(0,0,0,${DARKEN_ALPHA})`;
+  ctx.fillRect(0, 0, canvasW, canvasH);
+  ctx.restore();
+
+  // 3. Original image — centered, sharp
+  ctx.drawImage(img, imgX, imgY, imgDrawW, imgDrawH);
+
+  // 4. Subtle separator line around the centered image
+  ctx.save();
+  ctx.strokeStyle = `rgba(255,255,255,${SEPARATOR_ALPHA})`;
+  ctx.lineWidth = 1;
+  ctx.strokeRect(imgX + 0.5, imgY + 0.5, imgDrawW - 1, imgDrawH - 1);
+  ctx.restore();
+}
+
+// ── Crop alternatives ──────────────────────────────────────────────────────
+function renderCropAlternatives(img) {
+  const W     = img.naturalWidth;
+  const H     = img.naturalHeight;
+  const cropH = Math.round(W * state.ratio);
+
+  // Smart offset — portrait subjects typically have eyes ~25% from the top of the frame;
+  // place them at 30% from the top of the crop to leave comfortable headroom above.
+  const smartOffsetY = Math.max(0, Math.min(H - cropH,
+    Math.round(H * SMART_SUBJECT_FRAC - cropH * SMART_CROP_EYE_FRAC)
+  ));
+
+  const offsets = {
+    smart:  smartOffsetY,
+    top:    0,
+    center: Math.round((H - cropH) / 2),
+    bottom: H - cropH,
+  };
+
+  renderThumb(thumbSmart,  img, W, cropH, offsets.smart);
+  renderThumb(thumbTop,    img, W, cropH, offsets.top);
+  renderThumb(thumbCenter, img, W, cropH, offsets.center);
+  renderThumb(thumbBottom, img, W, cropH, offsets.bottom);
+
+  // Wire download buttons — always fetch by ID to avoid stale ref after cloning
+  function wireDl(id, offsetY, label) {
+    const btn   = document.getElementById(id);
+    const fresh = btn.cloneNode(true);
+    btn.parentNode.replaceChild(fresh, btn);
+    fresh.addEventListener('click', () => downloadCrop(img, W, cropH, offsetY, label));
+  }
+  wireDl('dl-smart',  offsets.smart,  'smart');
+  wireDl('dl-top',    offsets.top,    'top');
+  wireDl('dl-center', offsets.center, 'center');
+  wireDl('dl-bottom', offsets.bottom, 'bottom');
+
+  // Update hint text and reset smart label; attempt face detection async
+  const ratioStr = state.ratioLabel === '43' ? '4:3' : '16:9';
+  document.getElementById('crop-hint').textContent =
+    `These keep the full width and trim top/bottom to ${ratioStr}.`;
+  document.getElementById('smart-method').textContent = 'golden ratio';
+  cropAlternatives.classList.add('visible');
+  tryFaceDetection(img, W, H, cropH, smartOffsetY);
+}
+
+async function tryFaceDetection(img, W, H, cropH, heuristicOffsetY) {
+  if (!('FaceDetector' in window)) return;
+  try {
+    const detector = new FaceDetector({ fastMode: true });
+    const faces    = await detector.detect(img);
+    if (faces.length === 0) return;
+
+    // Use the largest detected face (most prominent subject)
+    const face = faces.reduce((best, f) =>
+      f.boundingBox.width * f.boundingBox.height >
+      best.boundingBox.width * best.boundingBox.height ? f : best
+    );
+
+    // Center the face vertically in the crop
+    const faceCenterY = face.boundingBox.top + face.boundingBox.height / 2;
+    const faceOffsetY = Math.max(0, Math.min(H - cropH,
+      Math.round(faceCenterY - cropH / 2)
+    ));
+
+    if (faceOffsetY === heuristicOffsetY) return;  // no meaningful change
+
+    // Update smart thumbnail and re-wire its download button
+    renderThumb(thumbSmart, img, W, cropH, faceOffsetY);
+    const btn   = document.getElementById('dl-smart');
+    const fresh = btn.cloneNode(true);
+    btn.parentNode.replaceChild(fresh, btn);
+    fresh.addEventListener('click', () => downloadCrop(img, W, cropH, faceOffsetY, 'smart'));
+    document.getElementById('smart-method').textContent = 'face detected';
+  } catch (_) {
+    // FaceDetector unavailable or failed — golden ratio heuristic stays
+  }
+}
+
+function renderThumb(thumbCanvas, img, W, cropH, offsetY) {
+  const thumbH = Math.round(THUMB_W * state.ratio);
+  thumbCanvas.width  = THUMB_W;
+  thumbCanvas.height = thumbH;
+  const ctx = thumbCanvas.getContext('2d');
+  ctx.drawImage(img, 0, offsetY, W, cropH, 0, 0, THUMB_W, thumbH);
+}
+
+function downloadCrop(img, W, cropH, offsetY, label) {
+  const off = document.createElement('canvas');
+  off.width  = W;
+  off.height = cropH;
+  off.getContext('2d').drawImage(img, 0, offsetY, W, cropH, 0, 0, W, cropH);
+  const baseName = state.originalFile
+    ? state.originalFile.name.replace(/\.[^.]+$/, '')
+    : 'photo';
+  triggerDownload(off.toDataURL('image/jpeg', JPEG_QUALITY), `${baseName}_crop_${label}_${state.ratioLabel}.jpg`);
+}
+
+// ── Download ───────────────────────────────────────────────────────────────
+function onDownload() {
+  const baseName = state.originalFile
+    ? state.originalFile.name.replace(/\.[^.]+$/, '')
+    : 'photo';
+
+  // Already-landscape path
+  if (state.landscapeURL) {
+    const ext = state.originalFile.name.split('.').pop() || 'jpg';
+    triggerDownload(state.landscapeURL, `${baseName}_original.${ext}`);
+    return;
+  }
+
+  // Normal path
+  const dataURL = canvas.toDataURL('image/jpeg', JPEG_QUALITY);
+  triggerDownload(dataURL, `${baseName}_horizontify_${state.ratioLabel}.jpg`);
+}
+
+function triggerDownload(href, filename) {
+  const a = document.createElement('a');
+  a.href = href;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+
+// ── UI state helpers ───────────────────────────────────────────────────────
+function showProcessing() {
+  uploadZone.style.display  = 'none';
+  processing.classList.add('visible');
+  resultZone.classList.remove('visible');
+}
+
+function hideProcessing() {
+  processing.classList.remove('visible');
+}
+
+function showResultZone() {
+  uploadZone.style.display = 'none';
+  resultZone.classList.add('visible');
+}
+
+function resetToUpload() {
+  // Clean up any object URLs
+  if (state.landscapeURL) {
+    URL.revokeObjectURL(state.landscapeURL);
+    state.landscapeURL = null;
+  }
+  state.originalFile  = null;
+  state.originalImage = null;
+
+  // Reset main canvas
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  canvas.width  = 0;
+  canvas.height = 0;
+  canvas.style.display = 'block';
+
+  // Reset thumbnail canvases
+  [thumbSmart, thumbTop, thumbCenter, thumbBottom].forEach(t => {
+    t.width = 0; t.height = 0;
+  });
+
+  ratioToggle.style.display = 'none';
+  cropBadge.classList.remove('visible');
+  cropAlternatives.classList.remove('visible');
+  resultZone.classList.remove('visible');
+  processing.classList.remove('visible');
+  uploadZone.style.display = '';
+
+  hideError();
+}
+
+function showError(msg) {
+  errorBanner.textContent = msg;
+  errorBanner.classList.add('visible');
+  hideProcessing();
+}
+
+function hideError() {
+  errorBanner.textContent = '';
+  errorBanner.classList.remove('visible');
+}
+
+// ── Boot ───────────────────────────────────────────────────────────────────
+initApp();
+</script>
+</body>
+</html>

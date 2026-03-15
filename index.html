@@ -286,13 +286,18 @@
     border-color: var(--accent);
   }
 
+  .crop-label-group {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 0;
+  }
+
   .smart-method {
     font-size: 0.65rem;
     color: var(--text-muted);
     opacity: 0.7;
     font-family: 'DM Mono', monospace;
-    flex: 1;
-    text-align: center;
   }
 
   @media (max-width: 520px) {
@@ -525,8 +530,10 @@
         <div class="crop-option crop-option--smart">
           <canvas id="thumb-smart" class="thumb-canvas"></canvas>
           <div class="crop-option-footer">
-            <span class="crop-label">✦ Smart</span>
-            <span class="smart-method" id="smart-method">golden ratio</span>
+            <div class="crop-label-group">
+              <span class="crop-label">✦ Smart</span>
+              <span class="smart-method" id="smart-method">golden ratio</span>
+            </div>
             <button class="btn-crop-dl" id="dl-smart">Download</button>
           </div>
         </div>
@@ -696,7 +703,7 @@ function processImage(img) {
   const H = img.naturalHeight;
 
   // Already landscape — show notice, offer original download
-  if (W >= H) {
+  if (W > H) {
     hideProcessing();
     canvas.style.display = 'none';
     ratioToggle.style.display = 'none';
@@ -741,7 +748,7 @@ function setRatio(ratio, label) {
 
   // Re-render if a portrait image is currently loaded
   const img = state.originalImage;
-  if (!img || img.naturalWidth >= img.naturalHeight) return;
+  if (!img || img.naturalWidth > img.naturalHeight) return;
 
   const W   = img.naturalWidth;
   const H   = img.naturalHeight;

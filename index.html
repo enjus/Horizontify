@@ -511,13 +511,13 @@
     <div class="canvas-wrapper">
       <canvas id="output-canvas"></canvas>
     </div>
-    <div id="ratio-toggle" class="ratio-toggle" style="display:none">
-      <button class="btn-ratio active" data-ratio="0.75"   data-label="43" >4:3</button>
-      <button class="btn-ratio"        data-ratio="0.5625" data-label="169">16:9</button>
-    </div>
     <div id="crop-badge">
       <div class="badge-label">Notice</div>
       <div id="crop-message"></div>
+    </div>
+    <div id="ratio-toggle" class="ratio-toggle" style="display:none">
+      <button class="btn-ratio active" data-ratio="0.75"   data-label="43" >4:3</button>
+      <button class="btn-ratio"        data-ratio="0.5625" data-label="169">16:9</button>
     </div>
     <div class="action-row">
       <button class="btn-primary" id="download-btn">Download JPEG</button>
@@ -702,14 +702,15 @@ function processImage(img) {
   const W = img.naturalWidth;
   const H = img.naturalHeight;
 
-  // Already landscape — show notice, offer original download
-  if (W > H) {
+  // Already wide enough for the requested ratio — show notice, offer original download
+  if (W * state.ratio >= H) {
     hideProcessing();
     canvas.style.display = 'none';
-    ratioToggle.style.display = 'none';
+    ratioToggle.style.display = '';
     cropBadge.classList.add('visible');
     cropBadge.querySelector('.badge-label').textContent = 'Notice';
-    cropMessage.textContent = 'This photo is already landscape — no conversion needed. Download the original below.';
+    const targetLabel = state.ratioLabel === '43' ? '4:3' : '16:9';
+    cropMessage.textContent = `This photo is already ${targetLabel} or wider — no conversion needed. Download the original below.`;
     cropAlternatives.classList.remove('visible');
     if (state.landscapeURL) URL.revokeObjectURL(state.landscapeURL);
     state.landscapeURL = URL.createObjectURL(state.originalFile);
@@ -746,18 +747,15 @@ function setRatio(ratio, label) {
     btn.classList.toggle('active', btn.dataset.label === label);
   });
 
-  // Re-render if a portrait image is currently loaded
+  // Re-render — ratio change may flip between notice view and processed view
   const img = state.originalImage;
-  if (!img || img.naturalWidth > img.naturalHeight) return;
+  if (!img) return;
 
-  const W   = img.naturalWidth;
-  const H   = img.naturalHeight;
-  const dims = computeCanvasDimensions(W, H);
-  canvas.width  = dims.canvasW;
-  canvas.height = dims.canvasH;
-  renderPillarbox(canvas.getContext('2d'), img, dims);
-  renderCropAlternatives(img);
-  downloadBtn.textContent = `Download ${label === '43' ? '4:3' : '16:9'} JPEG`;
+  if (state.landscapeURL) {
+    URL.revokeObjectURL(state.landscapeURL);
+    state.landscapeURL = null;
+  }
+  processImage(img);
 }
 
 function computeCanvasDimensions(imgW, imgH) {
